@@ -1,52 +1,62 @@
-import { StyleSheet, View, Text, SafeAreaView } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, Text, SafeAreaView, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useLocationStore } from '@/features/map/store/location-store';
-
-// Modelo simulado, después vendrá del Backend (NestJS / FastAPI)
-interface Vendor {
-  id: string;
-  name: string;
-  type: string;
-  priceRange: string;
-  distance: string;
-}
-
-const MOCK_DATA: Vendor[] = [
-  { id: '1', name: 'Desayunos Doña Flor', type: 'Desayuno', priceRange: '$1 - $3', distance: '120m' },
-  { id: '2', name: 'Empanadas El Tío', type: 'Snack', priceRange: '$0.5 - $2', distance: '250m' },
-  { id: '3', name: 'Jugos Naturales', type: 'Bebidas', priceRange: '$1.5', distance: '400m' },
-];
+import { useVendorsStore, Vendor } from '@/features/map/store/vendors-store';
 
 export default function ListScreen() {
   const { currentLocation } = useLocationStore();
+  const { vendors, fetchVendors, isLoading } = useVendorsStore();
+
+  useEffect(() => {
+    fetchVendors();
+  }, []);
 
   const renderItem = ({ item }: { item: Vendor }) => (
-    <View style={styles.card}>
-      <Text style={styles.name}>{item.name}</Text>
-      <Text style={styles.type}>{item.type} • {item.priceRange}</Text>
-      <Text style={styles.distance}>A {item.distance} de ti</Text>
-    </View>
+    <TouchableOpacity style={styles.card} activeOpacity={0.9}>
+      <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
+      <View style={styles.cardContent}>
+        <View style={styles.headerRow}>
+          <Text style={styles.name}>{item.name}</Text>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{item.type}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.detailsRow}>
+          <Text style={styles.price}>{item.priceRange}</Text>
+          <View style={styles.dot} />
+          {/* Aquí se calcularía la distancia real si estuviera en producción */}
+          <Text style={styles.distance}>Cerca de ti</Text> 
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.headerTitle}>Vendedores Cercanos</Text>
-        
-        {currentLocation ? (
-          <Text style={styles.subHeader}>Mostrando resultados cerca de tu ubicación actual</Text>
-        ) : (
-          <Text style={styles.subHeader}>Esperando ubicación...</Text>
-        )}
+      <View style={styles.header}>
+        <Text style={styles.title}>Descubre</Text>
+        <Text style={styles.subtitle}>
+          {currentLocation ? 'Trabajadores cerca de tu ubicación' : 'Encuentra los mejores servicios'}
+        </Text>
+      </View>
 
-        <View style={styles.listContainer}>
+      <View style={styles.container}>
+        {isLoading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+          </View>
+        ) : (
           <FlashList
-            data={MOCK_DATA}
+            data={vendors}
             renderItem={renderItem}
-            estimatedItemSize={100}
+            estimatedItemSize={120}
+            contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
+            showsVerticalScrollIndicator={false}
           />
-        </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -55,53 +65,107 @@ export default function ListScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3F4F6', // Tailwind gray-100 fallback
+    backgroundColor: '#F8FAFC', // Slate 50
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#0F172A', // Slate 900
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#64748B', // Slate 500
+    marginTop: 4,
+    fontWeight: '500',
   },
   container: {
     flex: 1,
-    padding: 16,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827', // Tailwind gray-900
-    marginBottom: 4,
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: 10,
   },
-  subHeader: {
-    fontSize: 14,
-    color: '#6B7280', // Tailwind gray-500
-    marginBottom: 16,
-  },
-  listContainer: {
+  centerContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   card: {
-    backgroundColor: 'white',
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 20,
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E2E8F0',
+  },
+  cardContent: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
   name: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#1E293B', // Slate 800
+    flex: 1,
+    marginRight: 8,
   },
-  type: {
+  badge: {
+    backgroundColor: '#EFF6FF', // Blue 50
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeText: {
+    color: '#2563EB', // Blue 600
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  price: {
     fontSize: 14,
-    color: '#4B5563',
-    marginBottom: 8,
+    color: '#10B981', // Emerald 500
+    fontWeight: '600',
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1', // Slate 300
+    marginHorizontal: 8,
   },
   distance: {
     fontSize: 14,
+    color: '#64748B', // Slate 500
     fontWeight: '500',
-    color: '#2563EB', // Tailwind blue-600
   },
   separator: {
-    height: 12,
+    height: 16,
   },
 });

@@ -1,45 +1,48 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { Tabs } from 'expo-router';
 import { useColorScheme } from 'react-native';
+import { Map, List, CreditCard } from 'lucide-react-native';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   
-  // Colores por defecto para evitar depender del archivo theme de Expo
   const colors = {
     background: scheme === 'dark' ? '#151718' : '#ffffff',
-    backgroundElement: scheme === 'dark' ? '#25292e' : '#f8f9fa',
     text: scheme === 'dark' ? '#ECEDEE' : '#11181C',
+    active: scheme === 'dark' ? '#3b82f6' : '#2563eb', // Blue
   };
 
   return (
-    <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Mapa</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="list">
-        <NativeTabs.Trigger.Label>Lista</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
-        />
-      </NativeTabs.Trigger>
-      
-      <NativeTabs.Trigger name="plans">
-        <NativeTabs.Trigger.Label>Planes</NativeTabs.Trigger.Label>
-        {/* Usamos el mismo icono de explore por ahora, pero lo puedes cambiar */}
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
-        />
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          borderTopColor: scheme === 'dark' ? '#25292e' : '#e5e5e5',
+        },
+        tabBarActiveTintColor: colors.active,
+        tabBarInactiveTintColor: scheme === 'dark' ? '#687076' : '#8b949e',
+      }}>
+      <Tabs.Screen 
+        name="index"
+        options={{
+          title: "Mapa",
+          tabBarIcon: ({ color, size }) => <Map color={color} size={size} />
+        }}
+      />
+      <Tabs.Screen 
+        name="list"
+        options={{
+          title: "Lista",
+          tabBarIcon: ({ color, size }) => <List color={color} size={size} />
+        }}
+      />
+      <Tabs.Screen 
+        name="plans"
+        options={{
+          title: "Planes",
+          tabBarIcon: ({ color, size }) => <CreditCard color={color} size={size} />
+        }}
+      />
+    </Tabs>
   );
 }
