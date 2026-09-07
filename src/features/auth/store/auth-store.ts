@@ -1,23 +1,30 @@
 import { create } from 'zustand';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: string;
+  name?: string | null;
+}
+
 interface AuthState {
   isAuthenticated: boolean;
   userToken: string | null;
-  login: (token: string) => void;
+  user: AuthUser | null;
+  setAuth: (token: string, user: AuthUser) => void;
   logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   userToken: null,
+  user: null,
 
-  login: (token) => {
-    // Aquí iría la lógica para guardar el token en SecureStore/AsyncStorage
-    set({ isAuthenticated: true, userToken: token });
+  setAuth: (token: string, user: AuthUser) => {
+    set({ isAuthenticated: true, userToken: token, user });
   },
-  
+
   logout: () => {
-    // Aquí iría la lógica para borrar el token de SecureStore/AsyncStorage
-    set({ isAuthenticated: false, userToken: null });
+    set({ isAuthenticated: false, userToken: null, user: null });
   },
 }));

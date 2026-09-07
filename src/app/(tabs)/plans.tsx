@@ -1,8 +1,67 @@
-import { StyleSheet, View, Text, SafeAreaView, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import { ENDPOINTS } from '@/core/config/api.config';
+
+export interface PlanItem {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  isPopular: boolean;
+}
+
+const DEFAULT_PLANS: PlanItem[] = [
+  {
+    id: 'plan-basic',
+    name: 'Plan Básico',
+    price: 0,
+    description: 'Aparece en el mapa, Actualiza tu ubicación manual, Perfil básico',
+    isPopular: false,
+  },
+  {
+    id: 'plan-premium',
+    name: 'Plan Premium',
+    price: 4.99,
+    description: 'Todo lo del plan básico, Seguimiento en tiempo real automático, Destacado en las búsquedas, Catálogo de productos con fotos',
+    isPopular: true,
+  },
+];
 
 export default function PlansScreen() {
+  const [plans, setPlans] = useState<PlanItem[]>(DEFAULT_PLANS);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    async function loadPlans(): Promise<void> {
+      try {
+        const response = await fetch(ENDPOINTS.subscriptions.plans);
+        if (response.ok) {
+          const data = (await response.json()) as PlanItem[];
+          if (Array.isArray(data) && data.length > 0) {
+            setPlans(data);
+          }
+        }
+      } catch (error) {
+        setPlans(DEFAULT_PLANS);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadPlans();
+  }, []);
+
   const handleSubscribe = (planName: string) => {
-    // Aquí iría la integración con Stripe o pasarela de pagos
     Alert.alert('Simulación de Pago', `Has seleccionado el ${planName}. En el futuro esto abrirá la pasarela de pagos.`);
   };
 
@@ -12,37 +71,53 @@ export default function PlansScreen() {
         <Text style={styles.headerTitle}>Planes para Vendedores</Text>
         <Text style={styles.subHeader}>Aumenta tu visibilidad y llega a más clientes</Text>
 
-        {/* Plan Gratuito */}
-        <View style={styles.card}>
-          <Text style={styles.planName}>Plan Básico</Text>
-          <Text style={styles.planPrice}>Gratis</Text>
-          <View style={styles.featuresList}>
-            <Text style={styles.feature}>✓ Aparece en el mapa</Text>
-            <Text style={styles.feature}>✓ Actualiza tu ubicación manual</Text>
-            <Text style={styles.feature}>✓ Perfil básico</Text>
+        {isLoading ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
           </View>
-          <TouchableOpacity style={styles.buttonOutline} onPress={() => handleSubscribe('Plan Básico')}>
-            <Text style={styles.buttonOutlineText}>Plan Actual</Text>
-          </TouchableOpacity>
-        </View>
+        ) : (
+          plans.map((plan) => {
+            const features = plan.description.split(',').map((f) => f.trim());
+            const isPremium = plan.isPopular || plan.price > 0;
 
-        {/* Plan Premium */}
-        <View style={[styles.card, styles.premiumCard]}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>RECOMENDADO</Text>
-          </View>
-          <Text style={[styles.planName, { color: 'white' }]}>Plan Premium</Text>
-          <Text style={[styles.planPrice, { color: 'white' }]}>$4.99 / mes</Text>
-          <View style={styles.featuresList}>
-            <Text style={[styles.feature, { color: '#E5E7EB' }]}>✓ Todo lo del plan básico</Text>
-            <Text style={[styles.feature, { color: '#E5E7EB' }]}>✓ Seguimiento en tiempo real automático</Text>
-            <Text style={[styles.feature, { color: '#E5E7EB' }]}>✓ Destacado en las búsquedas</Text>
-            <Text style={[styles.feature, { color: '#E5E7EB' }]}>✓ Catálogo de productos con fotos</Text>
-          </View>
-          <TouchableOpacity style={styles.buttonSolid} onPress={() => handleSubscribe('Plan Premium')}>
-            <Text style={styles.buttonSolidText}>Suscribirse Ahora</Text>
-          </TouchableOpacity>
-        </View>
+            return (
+              <View
+                key={plan.id}
+                style={[styles.card, isPremium ? styles.premiumCard : undefined]}
+              >
+                {plan.isPopular && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>RECOMENDADO</Text>
+                  </View>
+                )}
+                <Text style={[styles.planName, isPremium ? styles.whiteText : undefined]}>
+                  {plan.name}
+                </Text>
+                <Text style={[styles.planPrice, isPremium ? styles.whiteText : undefined]}>
+                  {plan.price === 0 ? 'Gratis' : `$${plan.price.toFixed(2)} / mes`}
+                </Text>
+                <View style={styles.featuresList}>
+                  {features.map((feature, idx) => (
+                    <Text
+                      key={`${plan.id}-feat-${idx}`}
+                      style={[styles.feature, isPremium ? styles.lightGrayText : undefined]}
+                    >
+                      ✓ {feature}
+                    </Text>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={isPremium ? styles.buttonSolid : styles.buttonOutline}
+                  onPress={() => handleSubscribe(plan.name)}
+                >
+                  <Text style={isPremium ? styles.buttonSolidText : styles.buttonOutlineText}>
+                    {plan.price === 0 ? 'Plan Actual' : 'Suscribirse Ahora'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -141,5 +216,16 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  loaderContainer: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whiteText: {
+    color: '#FFFFFF',
+  },
+  lightGrayText: {
+    color: '#E5E7EB',
   },
 });

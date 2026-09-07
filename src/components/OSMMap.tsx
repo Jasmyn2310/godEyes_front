@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 interface Vendor {
@@ -15,14 +15,15 @@ interface OSMMapProps {
     longitude: number;
   };
   vendors?: Vendor[];
-  style?: any;
+  focusVendor?: Vendor | null;
+  style?: StyleProp<ViewStyle>;
 }
 
-export const OSMMap = ({ initialRegion, vendors = [], style }: OSMMapProps) => {
+export const OSMMap = ({ initialRegion, vendors = [], focusVendor, style }: OSMMapProps) => {
   const webViewRef = useRef<WebView>(null);
-  const lat = initialRegion?.latitude || -12.0464;
-  const lng = initialRegion?.longitude || -77.0428;
-  const zoom = 15;
+  const lat = focusVendor ? focusVendor.lat : initialRegion?.latitude || -12.0464;
+  const lng = focusVendor ? focusVendor.lng : initialRegion?.longitude || -77.0428;
+  const zoom = focusVendor ? 17 : 15;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -56,14 +57,12 @@ export const OSMMap = ({ initialRegion, vendors = [], style }: OSMMapProps) => {
 
           let markers = {};
 
-          // Escuchar actualizaciones de React Native
           document.addEventListener('message', function(event) {
             try {
               const data = JSON.parse(event.data);
               if (data.type === 'UPDATE_VENDORS') {
                 const updatedVendors = data.payload;
                 
-                // Actualizar o crear marcadores
                 updatedVendors.forEach(vendor => {
                   if (markers[vendor.id]) {
                     markers[vendor.id].setLatLng([vendor.lat, vendor.lng]);
@@ -84,6 +83,12 @@ export const OSMMap = ({ initialRegion, vendors = [], style }: OSMMapProps) => {
                     markers[vendor.id] = marker;
                   }
                 });
+              } else if (data.type === 'FOCUS_VENDOR') {
+                const vendor = data.payload;
+                map.setView([vendor.lat, vendor.lng], 17);
+                if (markers[vendor.id]) {
+                  markers[vendor.id].openPopup();
+                }
               }
             } catch(e) {}
           });
@@ -92,7 +97,6 @@ export const OSMMap = ({ initialRegion, vendors = [], style }: OSMMapProps) => {
     </html>
   `;
 
-  // Enviar los vendors actualizados al WebView
   useEffect(() => {
     if (webViewRef.current && vendors.length > 0) {
       const message = JSON.stringify({ type: 'UPDATE_VENDORS', payload: vendors });
@@ -102,6 +106,16 @@ export const OSMMap = ({ initialRegion, vendors = [], style }: OSMMapProps) => {
       `);
     }
   }, [vendors]);
+
+  useEffect(() => {
+    if (webViewRef.current && focusVendor) {
+      const message = JSON.stringify({ type: 'FOCUS_VENDOR', payload: focusVendor });
+      webViewRef.current.injectJavaScript(`
+        document.dispatchEvent(new MessageEvent('message', {data: '${message}'}));
+        true;
+      `);
+    }
+  }, [focusVendor]);
 
   return (
     <View style={[styles.container, style]}>
@@ -113,6 +127,8 @@ export const OSMMap = ({ initialRegion, vendors = [], style }: OSMMapProps) => {
         javaScriptEnabled={true}
         domStorageEnabled={true}
         scrollEnabled={false}
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
       />
     </View>
   );

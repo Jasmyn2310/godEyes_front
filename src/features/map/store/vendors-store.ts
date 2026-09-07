@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { ENDPOINTS } from '@/core/config/api.config';
 
 export interface Vendor {
   id: string;
@@ -8,42 +9,75 @@ export interface Vendor {
   photoUrl: string;
   lat: number;
   lng: number;
+  rating?: number;
+  reviewsCount?: number;
 }
 
 interface VendorsState {
   vendors: Vendor[];
+  selectedVendor: Vendor | null;
   isLoading: boolean;
   errorMsg: string | null;
   fetchVendors: () => Promise<void>;
   updateVendors: (vendors: Vendor[]) => void;
+  setSelectedVendor: (vendor: Vendor | null) => void;
 }
 
-// Adjust URL as needed (if testing on Android Emulator, use 10.0.2.2. If on real device, use local IP)
-// Using local IP as fallback placeholder
-const API_URL = 'http://192.168.1.100:3000/vendors';
+function calculateMockRating(id: string): { rating: number; reviewsCount: number } {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash << 5) - hash + id.charCodeAt(i);
+    hash |= 0;
+  }
+  const positiveHash = Math.abs(hash);
+  const rating = Number((4.5 + (positiveHash % 50) / 100).toFixed(1));
+  const reviewsCount = 20 + (positiveHash % 180);
+  return { rating, reviewsCount };
+}
 
 export const useVendorsStore = create<VendorsState>((set) => ({
   vendors: [],
+  selectedVendor: null,
   isLoading: false,
   errorMsg: null,
 
   fetchVendors: async () => {
     set({ isLoading: true, errorMsg: null });
     try {
-      const response = await fetch(API_URL);
+      const response = await fetch(ENDPOINTS.vendors);
       if (!response.ok) {
         throw new Error('Failed to fetch vendors');
       }
-      const data = await response.json();
-      set({ vendors: data, isLoading: false });
+      const data = (await response.json()) as Vendor[];
+      const enriched = data.map((v) => {
+        const { rating, reviewsCount } = calculateMockRating(v.id);
+        return {
+          ...v,
+          rating,
+          reviewsCount,
+        };
+      });
+      set({ vendors: enriched, isLoading: false });
     } catch (error) {
       set({
-        errorMsg: 'No se pudieron cargar los vendedores. Asegúrate de estar conectado a la misma red y actualiza el API_URL.',
+        errorMsg: 'No se pudieron cargar los vendedores. Verifica tu conexión e inténtalo de nuevo.',
         isLoading: false,
       });
-      console.error('Error fetching vendors:', error);
     }
   },
 
-  updateVendors: (newVendors) => set({ vendors: newVendors }),
+  updateVendors: (newVendors) =>
+    set((state) => {
+      const enriched = newVendors.map((v) => {
+        const existing = state.vendors.find((item) => item.id === v.id);
+        return {
+          ...v,
+          rating: existing?.rating ?? 4.8,
+          reviewsCount: existing?.reviewsCount ?? 64,
+        };
+      });
+      return { vendors: enriched };
+    }),
+
+  setSelectedVendor: (vendor) => set({ selectedVendor: vendor }),
 }));

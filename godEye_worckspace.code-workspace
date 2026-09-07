@@ -1,11 +1,14 @@
 {
-	"folders": [
-		{
-			"path": "."
-		},
-		{
-			"path": "../god-eyes_back"
-		}
-	],
+  "folders": [
+    {
+      "path": "."
+    },
+    {
+      "path": "../god-eyes_back"
+    },
+    {
+      "path": "../../godEye_admin"
+    }
+  ],
   "settings": {}
 }
