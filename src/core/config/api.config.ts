@@ -2,9 +2,8 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 function resolveBaseUrl(): string {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim().replace(/\/$/, '');
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    return `http://${window.location.hostname}:3000`;
   }
 
   const hostUri = Constants.expoConfig?.hostUri;
@@ -13,6 +12,11 @@ function resolveBaseUrl(): string {
     if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `http://${hostIp}:3000`;
     }
+  }
+
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/$/, '');
   }
 
   if (Platform.OS === 'android') {
@@ -30,7 +34,25 @@ export const ENDPOINTS = {
     register: `${API_BASE_URL}/auth/register`,
     me: `${API_BASE_URL}/auth/me`,
   },
-  vendors: `${API_BASE_URL}/vendors`,
+  users: {
+    profile: `${API_BASE_URL}/users/profile`,
+  },
+  catalog: {
+    categories: `${API_BASE_URL}/categories`,
+    products: `${API_BASE_URL}/products`,
+  },
+  promotions: `${API_BASE_URL}/promotions`,
+  sales: {
+    base: `${API_BASE_URL}/sales`,
+    summary: `${API_BASE_URL}/sales/summary`,
+  },
+  uploads: {
+    image: `${API_BASE_URL}/uploads/image`,
+  },
+  vendors: {
+    list: `${API_BASE_URL}/vendors`,
+    detail: (id: string) => `${API_BASE_URL}/vendors/${id}/detail`,
+  },
   subscriptions: {
     plans: `${API_BASE_URL}/subscriptions/plans`,
   },

@@ -9,29 +9,18 @@ interface BrandLogoProps {
 }
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({
-  size = 72,
+  size = 110,
   showWordmark = true,
   subtitle = 'Sistema de Monitoreo & Telemetría',
 }) => {
   return (
     <View style={styles.container} accessible={true} accessibilityLabel="Logo GodEyes">
-      <View
-        style={[
-          styles.imageWrapper,
-          {
-            width: size,
-            height: size,
-            borderRadius: Math.round(size * 0.28),
-          },
-        ]}
-      >
-        <Image
-          source={require('../../../assets/images/godeyes-brand-logo.png')}
-          style={[styles.logoImage, { width: size, height: size }]}
-          contentFit="cover"
-          transition={300}
-        />
-      </View>
+      <Image
+        source={require('@/../assets/images/godeyes-brand-logo.png')}
+        style={{ width: size, height: size }}
+        contentFit="contain"
+        transition={200}
+      />
 
       {showWordmark ? (
         <View style={styles.textContainer}>
@@ -51,45 +40,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  imageWrapper: {
-    overflow: 'hidden',
-    backgroundColor: '#090D16',
-    borderWidth: 1.5,
-    borderColor: '#1E293B',
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  logoImage: {
-    borderRadius: 20,
-  },
   textContainer: {
     alignItems: 'center',
-    marginTop: 14,
+    marginTop: 12,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   titlePrimary: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.5,
     color: '#0F172A',
   },
   titleAccent: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.5,
     color: '#0284C7',
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: '#64748B',
-    marginTop: 4,
+    marginTop: 3,
     letterSpacing: 0.2,
   },
 });

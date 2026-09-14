@@ -11,21 +11,31 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import {
   Activity,
-  CheckCircle2,
   Compass,
+  DollarSign,
   MapPin,
   Navigation,
+  Package,
   Power,
-  Radio,
   RefreshCw,
   ShieldCheck,
-  Zap,
+  ShoppingBag,
+  Signal,
+  Store,
+  Tag,
 } from 'lucide-react-native';
 import { useAuthStore } from '@/features/auth/store/auth-store';
 import { socketService } from '@/core/services/socket';
+import {
+  vendorApiService,
+  type ProductItem,
+  type SalesSummary,
+  type UserProfile,
+} from '@/features/vendor/services/vendor-api.service';
 
 interface Coordinates {
   readonly latitude: number;
@@ -46,18 +56,59 @@ function isValidCoordinate(lat: number, lng: number): boolean {
 }
 
 export const VendorOperationView: React.FC = () => {
-  const { user } = useAuthStore();
+  const router = useRouter();
+  const { user, userToken } = useAuthStore();
   const [isTransmitting, setIsTransmitting] = useState<boolean>(false);
   const [coords, setCoords] = useState<Coordinates | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState<boolean>(false);
   const [lastBroadcastTime, setLastBroadcastTime] = useState<string | null>(null);
   const [serverConnected, setServerConnected] = useState<boolean>(false);
 
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [salesSummary, setSalesSummary] = useState<SalesSummary | null>(null);
+  const [productsCount, setProductsCount] = useState<number>(0);
+  const [isLoadingStats, setIsLoadingStats] = useState<boolean>(false);
+
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+
+  const loadRealData = useCallback(async () => {
+    if (!userToken) return;
+    setIsLoadingStats(true);
+    try {
+      const [profileData, summaryData, productsData] = await Promise.allSettled([
+        vendorApiService.getProfile(userToken),
+        vendorApiService.getSalesSummary(userToken),
+        vendorApiService.getProducts(userToken),
+      ]);
+
+      if (profileData.status === 'fulfilled') {
+        setProfile(profileData.value);
+        if (profileData.value.fixedLatitude && profileData.value.fixedLongitude && !coords) {
+          setCoords({
+            latitude: profileData.value.fixedLatitude,
+            longitude: profileData.value.fixedLongitude,
+            accuracy: 5.0,
+            speed: 0,
+          });
+        }
+      }
+
+      if (summaryData.status === 'fulfilled') {
+        setSalesSummary(summaryData.value);
+      }
+
+      if (productsData.status === 'fulfilled') {
+        setProductsCount(productsData.value.length);
+      }
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [userToken, coords]);
 
   useEffect(() => {
     socketService.connect();
     setServerConnected(true);
+    void loadRealData();
 
     return () => {
       if (locationSubscriptionRef.current) {
@@ -67,7 +118,7 @@ export const VendorOperationView: React.FC = () => {
       socketService.disconnect();
       setServerConnected(false);
     };
-  }, []);
+  }, [loadRealData]);
 
   const broadcastLocation = useCallback(
     (latitude: number, longitude: number) => {
@@ -89,10 +140,14 @@ export const VendorOperationView: React.FC = () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permiso de Ubicación Necesario',
-          'GodEyes requiere acceso a tu ubicación para que tus clientes puedan encontrar tu puesto en el mapa en tiempo real.',
-        );
+        if (Platform.OS === 'web') {
+          alert('Permiso de Ubicación Necesario para transmitir en el mapa.');
+        } else {
+          Alert.alert(
+            'Permiso Necesario',
+            'GodEyes requiere acceso a tu ubicación para que los clientes vean tu puesto en el radar.',
+          );
+        }
         setIsLoadingLocation(false);
         return;
       }
@@ -132,10 +187,11 @@ export const VendorOperationView: React.FC = () => {
       locationSubscriptionRef.current = subscription;
       setIsTransmitting(true);
     } catch {
-      Alert.alert(
-        'Error de GPS',
-        'No se pudo obtener la posición satelital del dispositivo. Verifica que el GPS esté activo.',
-      );
+      if (Platform.OS === 'web') {
+        alert('No se pudo capturar la señal GPS. Verifica los permisos de tu navegador.');
+      } else {
+        Alert.alert('Error de GPS', 'No se pudo obtener la posición satelital del dispositivo.');
+      }
     } finally {
       setIsLoadingLocation(false);
     }
@@ -174,12 +230,21 @@ export const VendorOperationView: React.FC = () => {
       if (isTransmitting) {
         broadcastLocation(updated.latitude, updated.longitude);
       }
+      await loadRealData();
     } catch {
-      Alert.alert('Aviso', 'No se pudo actualizar la posición en este momento.');
+      if (Platform.OS === 'web') {
+        alert('No se pudo actualizar la posición en este momento.');
+      } else {
+        Alert.alert('Aviso', 'No se pudo actualizar la posición en este momento.');
+      }
     } finally {
       setIsLoadingLocation(false);
     }
   };
+
+  const vendorDisplayName = profile?.name || user?.name || 'Mi Puesto GodEyes';
+  const vendorTypeBadge = profile?.vendorType || 'Comercio Ambulante';
+  const vendorAddressText = profile?.fixedAddress || 'Ubicación móvil';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -188,21 +253,66 @@ export const VendorOperationView: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.vendorGreeting}>Panel de Operación</Text>
-            <Text style={styles.vendorName}>{user?.name || 'Mi Puesto GodEyes'}</Text>
+        <View style={styles.headerCard}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.storeAvatar}>
+              <Store size={22} color="#0284C7" />
+            </View>
+            <View style={styles.statusPill}>
+              <View
+                style={[
+                  styles.statusDot,
+                  serverConnected ? styles.statusDotOnline : styles.statusDotOffline,
+                ]}
+              />
+              <Text style={styles.statusPillText}>
+                {serverConnected ? 'Servidor Conectado' : 'Reconectando'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.statusBadge}>
-            <View
-              style={[
-                styles.statusDot,
-                serverConnected ? styles.statusDotOnline : styles.statusDotOffline,
-              ]}
-            />
-            <Text style={styles.statusText}>
-              {serverConnected ? 'Servidor Conectado' : 'Reconectando'}
+
+          <Text style={styles.vendorGreeting}>PANEL DE OPERACIÓN</Text>
+          <Text style={styles.vendorName}>{vendorDisplayName}</Text>
+
+          <View style={styles.tagRow}>
+            <View style={styles.tagBadge}>
+              <Tag size={12} color="#0284C7" />
+              <Text style={styles.tagBadgeText}>{vendorTypeBadge}</Text>
+            </View>
+            <View style={styles.addressBadge}>
+              <MapPin size={12} color="#64748B" />
+              <Text style={styles.addressBadgeText} numberOfLines={1}>
+                {vendorAddressText}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.statsSummaryContainer}>
+          <View style={styles.statBox}>
+            <View style={styles.statIconWrap}>
+              <DollarSign size={16} color="#059669" />
+            </View>
+            <Text style={styles.statValue}>
+              ${(salesSummary?.todayTotal ?? 0).toFixed(2)}
             </Text>
+            <Text style={styles.statTitle}>Ventas de Hoy</Text>
+          </View>
+
+          <View style={styles.statBox}>
+            <View style={[styles.statIconWrap, { backgroundColor: '#EFF6FF' }]}>
+              <ShoppingBag size={16} color="#2563EB" />
+            </View>
+            <Text style={styles.statValue}>{salesSummary?.todayCount ?? 0}</Text>
+            <Text style={styles.statTitle}>Órdenes Hoy</Text>
+          </View>
+
+          <View style={styles.statBox}>
+            <View style={[styles.statIconWrap, { backgroundColor: '#FAF5FF' }]}>
+              <Package size={16} color="#9333EA" />
+            </View>
+            <Text style={styles.statValue}>{productsCount}</Text>
+            <Text style={styles.statTitle}>Catálogo</Text>
           </View>
         </View>
 
@@ -220,9 +330,9 @@ export const VendorOperationView: React.FC = () => {
               ]}
             >
               {isTransmitting ? (
-                <Radio size={28} color="#10B981" />
+                <Signal size={26} color="#059669" />
               ) : (
-                <Power size={28} color="#64748B" />
+                <Power size={26} color="#64748B" />
               )}
             </View>
             <View style={styles.heroStateLabels}>
@@ -232,26 +342,23 @@ export const VendorOperationView: React.FC = () => {
                   isTransmitting ? styles.heroStateTagActive : styles.heroStateTagInactive,
                 ]}
               >
-                {isTransmitting ? 'EN LÍNEA • TRANSMITIENDO' : 'PAUSADO • INACTIVO'}
+                {isTransmitting ? 'EN LÍNEA • BALIZA ACTIVA' : 'PAUSADO • FUERA DEL RADAR'}
               </Text>
               <Text style={styles.heroTitle}>
-                {isTransmitting ? 'Puesto Visible al Público' : 'Baliza GPS Apagada'}
+                {isTransmitting ? 'Puesto Visible a Clientes' : 'Baliza Satelital Apagada'}
               </Text>
             </View>
           </View>
 
           <Text style={styles.heroDescription}>
             {isTransmitting
-              ? 'Tu ubicación en vivo está siendo transmitida a los clientes de GodEyes en un radio de cobertura de 500m.'
-              : 'Tus clientes no pueden ver tu puesto en el radar. Enciende la baliza para comenzar a recibir visitas.'}
+              ? 'Tus clientes pueden ver tu posición en vivo en el radar y seguir tu desplazamiento en tiempo real.'
+              : 'Enciende tu baliza para transmitir tu ubicación y aparecer en el mapa satelital de los clientes.'}
           </Text>
 
           <Pressable
             onPress={handleToggleTransmission}
             disabled={isLoadingLocation}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel={isTransmitting ? 'Detener transmisión' : 'Iniciar transmisión'}
             style={({ pressed }) => [
               styles.ctaButton,
               isTransmitting ? styles.ctaButtonStop : styles.ctaButtonStart,
@@ -262,40 +369,55 @@ export const VendorOperationView: React.FC = () => {
             {isLoadingLocation ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <View style={styles.ctaContent}>
-                {isTransmitting ? (
-                  <>
-                    <Power size={20} color="#FFFFFF" />
-                    <Text style={styles.ctaText}>Pausar Transmisión</Text>
-                  </>
-                ) : (
-                  <>
-                    <Zap size={20} color="#FFFFFF" />
-                    <Text style={styles.ctaText}>Transmitir mi Puesto</Text>
-                  </>
-                )}
-              </View>
+              <Text style={styles.ctaText}>
+                {isTransmitting ? 'Pausar Transmisión' : 'Transmitir mi Puesto en Vivo'}
+              </Text>
             )}
           </Pressable>
         </View>
 
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.sectionHeaderTitle}>Accesos Rápidos</Text>
+          <View style={styles.quickActionsGrid}>
+            <Pressable
+              onPress={() => router.push('/(tabs)/sales')}
+              style={({ pressed }) => [
+                styles.quickActionButton,
+                pressed ? styles.quickActionPressed : null,
+              ]}
+            >
+              <Text style={styles.quickActionTitle}>Registrar Venta</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/(tabs)/products')}
+              style={({ pressed }) => [
+                styles.quickActionButton,
+                pressed ? styles.quickActionPressed : null,
+              ]}
+            >
+              <Text style={styles.quickActionTitle}>Gestionar Menú</Text>
+            </Pressable>
+          </View>
+        </View>
+
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Telemetría en Vivo</Text>
+          <Text style={styles.sectionHeaderTitle}>Telemetría GPS en Vivo</Text>
           <Pressable
             onPress={handleManualRefresh}
             disabled={isLoadingLocation}
             style={styles.refreshButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Refrescar telemetría"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <RefreshCw size={16} color="#0284C7" />
-            <Text style={styles.refreshText}>Refrescar</Text>
           </Pressable>
         </View>
 
         <View style={styles.metricsGrid}>
           <View style={styles.metricCard}>
             <View style={styles.metricHeader}>
-              <MapPin size={18} color="#0284C7" />
+              <MapPin size={16} color="#0284C7" />
               <Text style={styles.metricLabel}>Coordenadas</Text>
             </View>
             <Text style={styles.metricValue}>
@@ -310,7 +432,7 @@ export const VendorOperationView: React.FC = () => {
 
           <View style={styles.metricCard}>
             <View style={styles.metricHeader}>
-              <Compass size={18} color="#059669" />
+              <Compass size={16} color="#059669" />
               <Text style={styles.metricLabel}>Precisión GPS</Text>
             </View>
             <Text style={styles.metricValue}>
@@ -323,7 +445,7 @@ export const VendorOperationView: React.FC = () => {
 
           <View style={styles.metricCard}>
             <View style={styles.metricHeader}>
-              <Navigation size={18} color="#D97706" />
+              <Navigation size={16} color="#D97706" />
               <Text style={styles.metricLabel}>Movimiento</Text>
             </View>
             <Text style={styles.metricValue}>
@@ -338,21 +460,21 @@ export const VendorOperationView: React.FC = () => {
 
           <View style={styles.metricCard}>
             <View style={styles.metricHeader}>
-              <Activity size={18} color="#7C3AED" />
+              <Activity size={16} color="#7C3AED" />
               <Text style={styles.metricLabel}>Último Enlace</Text>
             </View>
             <Text style={styles.metricValue}>{lastBroadcastTime || 'En espera'}</Text>
-            <Text style={styles.metricSub}>Sincronización socket</Text>
+            <Text style={styles.metricSub}>Socket sincronizado</Text>
           </View>
         </View>
 
         <View style={styles.securityNoticeCard}>
           <ShieldCheck size={20} color="#0284C7" style={styles.securityIcon} />
           <View style={styles.securityContent}>
-            <Text style={styles.securityTitle}>Privacidad y Seguridad Garantizada</Text>
+            <Text style={styles.securityTitle}>Privacidad y Control</Text>
             <Text style={styles.securityText}>
-              Tus coordenadas solo se transmiten mientras mantengas la baliza encendida. Al pausar,
-              ningún cliente ni tercero tiene acceso a tu ubicación.
+              Tu ubicación solo se comparte mientras la baliza esté encendida. Al pausarla, ningún
+              cliente tiene acceso a tu posición en tiempo real.
             </Text>
           </View>
         </View>
@@ -367,44 +489,53 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 36,
   },
-  header: {
+  headerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
-  vendorGreeting: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  storeAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
   },
-  vendorName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
-    letterSpacing: -0.3,
-  },
-  statusBadge: {
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     marginRight: 6,
   },
   statusDotOnline: {
@@ -413,22 +544,111 @@ const styles = StyleSheet.create({
   statusDotOffline: {
     backgroundColor: '#94A3B8',
   },
-  statusText: {
-    fontSize: 12,
+  statusPillText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#334155',
+    color: '#475569',
+  },
+  vendorGreeting: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+    letterSpacing: 0.8,
+  },
+  vendorName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+    letterSpacing: -0.3,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  tagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  tagBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0284C7',
+  },
+  addressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    maxWidth: '65%',
+  },
+  addressBadgeText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  statsSummaryContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  statIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  statTitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
   },
   heroCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 22,
+    padding: 18,
     borderWidth: 1.5,
-    marginBottom: 24,
+    marginBottom: 20,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowRadius: 10,
+    elevation: 2,
   },
   heroCardActive: {
     borderColor: '#A7F3D0',
@@ -441,29 +661,33 @@ const styles = StyleSheet.create({
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   beaconIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   beaconActiveIcon: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
   },
   beaconInactiveIcon: {
     backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   heroStateLabels: {
     flex: 1,
   },
   heroStateTag: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
     marginBottom: 2,
   },
   heroStateTagActive: {
@@ -473,34 +697,37 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   heroTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
   },
   heroDescription: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
     color: '#475569',
-    marginBottom: 20,
+    lineHeight: 18,
+    marginBottom: 16,
   },
   ctaButton: {
-    height: 54,
     borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
   },
   ctaButtonStart: {
     backgroundColor: '#0284C7',
     shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   ctaButtonStop: {
     backgroundColor: '#DC2626',
     shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   ctaButtonPressed: {
     opacity: 0.9,
@@ -516,95 +743,134 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  quickActionsContainer: {
+    marginBottom: 20,
+  },
+  sectionHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 10,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickActionButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  quickActionPressed: {
+    backgroundColor: '#F8FAFC',
+    transform: [{ scale: 0.98 }],
+  },
+  quickActionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    letterSpacing: -0.2,
+    marginBottom: 10,
   },
   refreshButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: '#E0F2FE',
     paddingVertical: 4,
     paddingHorizontal: 8,
+    borderRadius: 8,
   },
   refreshText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: '#0284C7',
   },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
     marginBottom: 20,
   },
   metricCard: {
+    width: '48%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    width: '48%',
-    flexGrow: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   metricHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
   },
   metricValue: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 2,
+    fontVariant: ['tabular-nums'],
   },
   metricSub: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#94A3B8',
+    marginTop: 2,
   },
   securityNoticeCard: {
     flexDirection: 'row',
     backgroundColor: '#F0F9FF',
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#BAE6FD',
-    borderRadius: 16,
-    padding: 16,
     alignItems: 'flex-start',
+    gap: 10,
   },
   securityIcon: {
-    marginRight: 12,
     marginTop: 2,
   },
   securityContent: {
     flex: 1,
   },
   securityTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0369A1',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   securityText: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#0C4A6E',
+    fontSize: 11,
+    color: '#475569',
+    lineHeight: 16,
   },
 });

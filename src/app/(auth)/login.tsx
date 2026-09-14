@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react-native';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
 import { useAuthStore } from '@/features/auth/store/auth-store';
 import { BrandLogo } from '@/shared/ui/brand-logo';
 import { ENDPOINTS } from '@/core/config/api.config';
@@ -106,7 +106,7 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.headerSection}>
-            <BrandLogo size={80} />
+            <BrandLogo size={112} />
           </View>
 
           <View style={styles.cardContainer}>
@@ -206,10 +206,7 @@ export default function LoginScreen() {
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <View style={styles.buttonContent}>
-                  <Text style={styles.submitButtonText}>Entrar al Sistema</Text>
-                  <ArrowRight size={18} color="#FFFFFF" />
-                </View>
+                <Text style={styles.submitButtonText}>Entrar al Sistema</Text>
               )}
             </Pressable>
 
@@ -233,6 +230,16 @@ export default function LoginScreen() {
                   onPress={() => handleFillCredentials('vendor0@godeyes.test', 'vendor123')}
                 >
                   <Text style={styles.demoChipText}>Vendedor</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.demoChip,
+                    styles.demoChipClient,
+                    pressed ? styles.demoChipClientPressed : null,
+                  ]}
+                  onPress={() => handleFillCredentials('cliente@godeyes.com', 'cliente123')}
+                >
+                  <Text style={[styles.demoChipText, styles.demoChipClientText]}>Cliente</Text>
                 </Pressable>
               </View>
             </View>
@@ -403,10 +410,20 @@ const styles = StyleSheet.create({
   demoChipPressed: {
     backgroundColor: '#E0F2FE',
   },
+  demoChipClient: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  demoChipClientPressed: {
+    backgroundColor: '#D1FAE5',
+  },
   demoChipText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#0369A1',
+  },
+  demoChipClientText: {
+    color: '#059669',
   },
   footerContainer: {
     flexDirection: 'row',

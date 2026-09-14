@@ -141,6 +141,29 @@ Cada tarjeta de la lista incorpora el botón interactivo **"Ubicar en Mapa"**:
 3. El componente `OSMMap` inyecta un evento seguro al motor de renderizado de Leaflet (`FOCUS_VENDOR`).
 4. La cámara del mapa se desplaza suavemente, aplica un nivel de acercamiento cercano (Zoom 17) y despliega automáticamente el marcador emergente (*popup*) del puesto seleccionado.
 
+#### 5.5 Ecosistema de Gestión Comercial para Vendedores
+Para dotar al vendedor ambulante de autonomía operativa y herramientas de gestión empresarial:
+1. **Doble Esquema de Ubicación (Fija vs. Telemetría en Vivo):**
+   * **Ubicación Fija Registrada:** Se almacena en la tabla `users` (`fixed_latitude`, `fixed_longitude`, `fixed_address`). Representa la coordenada física habitual del puesto. Si el vendedor no tiene su baliza satelital encendida, el sistema sitúa automáticamente su puesto sobre el mapa en este punto.
+   * **Baliza en Tiempo Real:** Emisión GPS continua vía WebSockets, permitiendo a clientes visualizar el desplazamiento en vivo del vendedor (marcador verde con pulso de radar).
+2. **Catálogo de Productos y Categorías Dinámicas:**
+   * Cada vendedor administra sus propias categorías comerciales (`categories`).
+   * Creación de productos con precio unitario, disponibilidad e **incorporación de fotografías locales** seleccionadas directamente desde la galería del dispositivo móvil mediante `expo-image-picker`.
+   * Almacenamiento local mediante un microservicio de subidas en NestJS (`POST /uploads/image`) gestionado por Multer y servido de forma estática bajo control de acceso.
+3. **Módulo de Promociones y Ofertas Especiales:**
+   * Registro de promociones con porcentaje de descuento, precio promocional especial y vigencia temporal (`promotions`).
+4. **Terminal de Registro de Ventas y Resumen Financiero:**
+   * Interfaz de venta rápida (POS móvil) que calcula subtotales en tiempo real.
+   * Panel de analítica que computa automáticamente: volumen total vendido hoy, conteo de transacciones del día, ticket promedio, y acumulados de semana y mes (`sales/summary`).
+
+#### 5.6 Experiencia de Descubrimiento y Catálogo para el Cliente
+Al presionar sobre el marcador de cualquier puesto en el mapa o en la lista de puestos cercanos:
+1. Se despliega un modal ergonómico en la zona del pulgar (`VendorDetailModal`).
+2. El cliente accede a 3 secciones especializadas:
+   * **Productos:** Clasificados por las categorías creadas por el vendedor, con fotos, descripciones y precios oficiales.
+   * **Promociones Activas:** Banners visuales con ofertas vigentes.
+   * **Ubicación:** Dirección fija registrada, contacto directo telefónico o por WhatsApp, y botón para centrar en el mapa.
+
 ---
 
 ### 6. Seguridad Móvil y Privacidad de Datos

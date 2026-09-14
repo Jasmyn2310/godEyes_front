@@ -17,13 +17,15 @@ import {
   MapPin,
   Navigation,
   Search,
+  Signal,
   Star,
   Store,
   X,
 } from 'lucide-react-native';
 import { useLocationStore } from '@/features/map/store/location-store';
 import { useVendorsStore, Vendor } from '@/features/map/store/vendors-store';
-import { useAuthStore } from '@/features/auth/store/auth-store';
+import { formatMediaUrl } from '@/features/vendor/services/vendor-api.service';
+import { VendorDetailModal } from '@/features/vendor/components/vendor-detail-modal';
 
 const CATEGORIES = ['Todos', 'Desayuno', 'Snack', 'Bebidas', 'Almuerzo', 'Postres'] as const;
 
@@ -55,71 +57,121 @@ interface VendorWithDistance extends Vendor {
 
 interface VendorCardProps {
   readonly vendor: VendorWithDistance;
+  readonly onOpenDetail: (vendor: VendorWithDistance) => void;
   readonly onLocate: (vendor: VendorWithDistance) => void;
 }
 
-const VendorCard = React.memo<VendorCardProps>(({ vendor, onLocate }) => {
+const VendorCard = React.memo<VendorCardProps>(({ vendor, onOpenDetail, onLocate }) => {
+  const isLive = vendor.isLive || vendor.locationType === 'realtime';
+
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={() => onOpenDetail(vendor)}
+      style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
+    >
       <View style={styles.cardHeaderRow}>
-        <Image
-          source={{ uri: vendor.photoUrl }}
-          style={styles.avatar}
-          contentFit="cover"
-          transition={200}
-        />
+        {vendor.photoUrl ? (
+          <Image
+            source={{ uri: formatMediaUrl(vendor.photoUrl) }}
+            style={styles.avatar}
+            contentFit="cover"
+            transition={200}
+          />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Store size={26} color="#0284C7" />
+          </View>
+        )}
+
         <View style={styles.vendorInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.vendorName} numberOfLines={1}>
               {vendor.name}
             </Text>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>{vendor.type}</Text>
-            </View>
+            {isLive ? (
+              <View style={styles.liveTag}>
+                <Signal size={10} color="#15803D" />
+                <Text style={styles.liveTagText}>EN VIVO</Text>
+              </View>
+            ) : (
+              <View style={styles.fixedTag}>
+                <MapPin size={10} color="#0369A1" />
+                <Text style={styles.fixedTagText}>PUESTO FIJO</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.ratingRow}>
             <View style={styles.starsContainer}>
-              <Star size={14} color="#F59E0B" fill="#F59E0B" />
+              <Star size={13} color="#F59E0B" fill="#F59E0B" />
               <Text style={styles.ratingScore}>{vendor.rating ?? 4.8}</Text>
             </View>
-            <Text style={styles.reviewsCount}>({vendor.reviewsCount ?? 45} opiniones)</Text>
+            <Text style={styles.reviewsCount}>({vendor.reviewsCount ?? 45})</Text>
             <View style={styles.dotSeparator} />
-            <Text style={styles.priceRangeText}>{vendor.priceRange}</Text>
+            <Text style={styles.categoryBadgeText}>{vendor.type || 'Comercio'}</Text>
           </View>
+
+          {vendor.fixedAddress ? (
+            <Text style={styles.addressText} numberOfLines={1}>
+              {vendor.fixedAddress}
+            </Text>
+          ) : null}
         </View>
       </View>
 
       <View style={styles.cardFooter}>
         <View style={styles.distanceBadge}>
-          <MapPin size={14} color="#0284C7" />
+          <MapPin size={13} color="#0284C7" />
           <Text style={styles.distanceText}>
-            {vendor.distanceKm !== null ? `A ${formatDistance(vendor.distanceKm)} de ti` : 'Ubicación activa'}
+            {vendor.distanceKm !== null
+              ? `A ${formatDistance(vendor.distanceKm)} de ti`
+              : 'Ubicación activa'}
           </Text>
         </View>
 
-        <Pressable
-          onPress={() => onLocate(vendor)}
-          style={({ pressed }) => [styles.locateButton, pressed ? styles.locateButtonPressed : null]}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={`Ubicar puesto de ${vendor.name} en el mapa`}
-        >
-          <Navigation size={14} color="#FFFFFF" />
-          <Text style={styles.locateButtonText}>Ubicar en Mapa</Text>
-        </Pressable>
+        <View style={styles.actionButtonsRow}>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onLocate(vendor);
+            }}
+            style={({ pressed }) => [
+              styles.locateIconButton,
+              pressed ? styles.locateButtonPressed : null,
+            ]}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={`Ubicar puesto de ${vendor.name} en el mapa`}
+          >
+            <Navigation size={14} color="#0284C7" />
+          </Pressable>
+
+          <Pressable
+            onPress={() => onOpenDetail(vendor)}
+            style={({ pressed }) => [
+              styles.detailButton,
+              pressed ? styles.detailButtonPressed : null,
+            ]}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={`Ver menú y promociones de ${vendor.name}`}
+          >
+            <Text style={styles.detailButtonText}>Ver Catálogo</Text>
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 });
 
 export default function ListScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
   const { currentLocation } = useLocationStore();
   const { vendors, fetchVendors, setSelectedVendor, isLoading } = useVendorsStore();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+  const [selectedVendorForModal, setSelectedVendorForModal] =
+    useState<VendorWithDistance | null>(null);
 
   useEffect(() => {
     void fetchVendors();
@@ -163,6 +215,10 @@ export default function ListScreen() {
     return list;
   }, [vendors, currentLocation, selectedCategory, searchQuery]);
 
+  const handleOpenDetail = useCallback((vendor: VendorWithDistance) => {
+    setSelectedVendorForModal(vendor);
+  }, []);
+
   const handleLocateVendor = useCallback(
     (vendor: VendorWithDistance) => {
       setSelectedVendor(vendor);
@@ -173,12 +229,14 @@ export default function ListScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: VendorWithDistance }) => (
-      <VendorCard vendor={item} onLocate={handleLocateVendor} />
+      <VendorCard
+        vendor={item}
+        onOpenDetail={handleOpenDetail}
+        onLocate={handleLocateVendor}
+      />
     ),
-    [handleLocateVendor],
+    [handleOpenDetail, handleLocateVendor],
   );
-
-  const isVendor = user?.role === 'vendor';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -189,9 +247,7 @@ export default function ListScreen() {
           <View>
             <Text style={styles.title}>Mejores Puestos</Text>
             <Text style={styles.subtitle}>
-              {isVendor
-                ? 'Directorio de referencia de servicios'
-                : 'Puestos valorados y ordenados por cercanía'}
+              Explora cartas, productos y promociones de cada vendedor
             </Text>
           </View>
         </View>
@@ -201,45 +257,40 @@ export default function ListScreen() {
           <TextInput
             style={styles.searchInput}
             placeholder="Buscar por nombre, comida o precio..."
+            placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#94A3B8"
-            autoCorrect={false}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
           />
-          {searchQuery.length > 0 ? (
-            <Pressable
-              onPress={() => setSearchQuery('')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
               <X size={16} color="#94A3B8" />
             </Pressable>
-          ) : null}
+          )}
         </View>
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesContainer}
+          contentContainerStyle={styles.categoryScroll}
         >
           {CATEGORIES.map((category) => {
             const isSelected = selectedCategory === category;
             return (
               <Pressable
                 key={category}
-                style={({ pressed }) => [
-                  styles.categoryPill,
-                  isSelected ? styles.categoryPillActive : null,
-                  pressed ? styles.categoryPillPressed : null,
-                ]}
                 onPress={() => setSelectedCategory(category)}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel={`Filtrar categoría ${category}`}
+                style={({ pressed }) => [
+                  styles.categoryChip,
+                  isSelected ? styles.categoryChipSelected : null,
+                  pressed ? styles.categoryChipPressed : null,
+                ]}
               >
                 <Text
                   style={[
-                    styles.categoryPillText,
-                    isSelected ? styles.categoryPillTextActive : null,
+                    styles.categoryChipText,
+                    isSelected ? styles.categoryChipTextSelected : null,
                   ]}
                 >
                   {category}
@@ -250,29 +301,47 @@ export default function ListScreen() {
         </ScrollView>
       </View>
 
-      <View style={styles.listContainer}>
-        {isLoading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#0284C7" />
-            <Text style={styles.loadingText}>Cargando puestos destacados...</Text>
-          </View>
-        ) : processedVendors.length === 0 ? (
-          <View style={styles.centerContainer}>
-            <Text style={styles.emptyTitle}>Sin resultados</Text>
-            <Text style={styles.emptySubtitle}>
-              No se encontraron puestos que coincidan con tu búsqueda.
-            </Text>
-          </View>
-        ) : (
+      {isLoading && vendors.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#0284C7" />
+          <Text style={styles.loadingText}>Cargando puestos disponibles...</Text>
+        </View>
+      ) : (
+        <View style={styles.listContainer}>
           <FlashList
             data={processedVendors}
             renderItem={renderItem}
             estimatedItemSize={140}
+            keyExtractor={(item: VendorWithDistance) => item.id}
             contentContainerStyle={styles.flashListContent}
-            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Store size={48} color="#CBD5E1" />
+                <Text style={styles.emptyTitle}>No se encontraron puestos</Text>
+                <Text style={styles.emptySubtitle}>
+                  Intenta cambiar el término de búsqueda o seleccionar otra categoría.
+                </Text>
+              </View>
+            }
           />
-        )}
-      </View>
+        </View>
+      )}
+
+      <VendorDetailModal
+        vendorId={selectedVendorForModal?.id ?? null}
+        distanceText={
+          selectedVendorForModal?.distanceKm !== null && selectedVendorForModal?.distanceKm !== undefined
+            ? formatDistance(selectedVendorForModal.distanceKm)
+            : null
+        }
+        visible={Boolean(selectedVendorForModal)}
+        onClose={() => setSelectedVendorForModal(null)}
+        onFocusOnMap={() => {
+          if (selectedVendorForModal) {
+            handleLocateVendor(selectedVendorForModal);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -284,47 +353,44 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
-    elevation: 2,
+    elevation: 3,
     zIndex: 10,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   headerIcon: {
     marginRight: 10,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F1F5F9',
     borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 46,
+    paddingHorizontal: 12,
+    height: 42,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   searchIcon: {
     marginRight: 8,
@@ -333,32 +399,33 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#0F172A',
-    height: '100%',
+    paddingVertical: 0,
   },
-  categoriesContainer: {
+  categoryScroll: {
     gap: 8,
+    paddingBottom: 6,
   },
-  categoryPill: {
+  categoryChip: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  categoryPillActive: {
+  categoryChipSelected: {
     backgroundColor: '#0284C7',
     borderColor: '#0284C7',
   },
-  categoryPillPressed: {
+  categoryChipPressed: {
     opacity: 0.8,
   },
-  categoryPillText: {
+  categoryChipText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#475569',
   },
-  categoryPillTextActive: {
+  categoryChipTextSelected: {
     color: '#FFFFFF',
   },
   listContainer: {
@@ -370,62 +437,87 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     elevation: 2,
+  },
+  cardPressed: {
+    opacity: 0.95,
   },
   cardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
   },
   avatar: {
-    width: 52,
-    height: 52,
+    width: 60,
+    height: 60,
     borderRadius: 14,
-    backgroundColor: '#E2E8F0',
-    marginRight: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   vendorInfo: {
     flex: 1,
+    marginLeft: 12,
   },
   nameRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 4,
   },
   vendorName: {
-    flex: 1,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
-    marginRight: 8,
+    flex: 1,
+    marginRight: 6,
   },
-  categoryBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  liveTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
   },
-  categoryBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1D4ED8',
+  liveTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  fixedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  fixedTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0369A1',
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginBottom: 4,
   },
   starsContainer: {
     flexDirection: 'row',
@@ -433,32 +525,39 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   ratingScore: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#B45309',
   },
   reviewsCount: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 11,
+    color: '#94A3B8',
+    marginLeft: 3,
   },
   dotSeparator: {
     width: 3,
     height: 3,
-    borderRadius: 2,
+    borderRadius: 1.5,
     backgroundColor: '#CBD5E1',
+    marginHorizontal: 6,
   },
-  priceRangeText: {
-    fontSize: 12,
+  categoryBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#059669',
+    color: '#475569',
+  },
+  addressText: {
+    fontSize: 11,
+    color: '#64748B',
   },
   cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 10,
+    justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+    marginTop: 8,
   },
   distanceBadge: {
     flexDirection: 'row',
@@ -470,24 +569,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0284C7',
   },
-  locateButton: {
+  actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    gap: 8,
+  },
+  locateIconButton: {
+    width: 34,
+    height: 34,
     borderRadius: 10,
-    minHeight: 36,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   locateButtonPressed: {
-    backgroundColor: '#0369A1',
-    transform: [{ scale: 0.98 }],
+    opacity: 0.7,
   },
-  locateButtonText: {
+  detailButton: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  detailButtonPressed: {
+    opacity: 0.8,
+  },
+  detailButtonText: {
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   centerContainer: {
     flex: 1,
@@ -500,15 +610,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748B',
   },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 40,
+  },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 4,
+    color: '#334155',
+    marginTop: 12,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#94A3B8',
     textAlign: 'center',
+    marginTop: 4,
+    maxWidth: 240,
   },
 });

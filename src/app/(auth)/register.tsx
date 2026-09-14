@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from 'lucide-react-native';
+import { Eye, EyeOff, Lock, Mail, User } from 'lucide-react-native';
 import { BrandLogo } from '@/shared/ui/brand-logo';
 import { ENDPOINTS } from '@/core/config/api.config';
 
@@ -25,6 +25,7 @@ interface RegisterResponsePayload {
 }
 
 export default function RegisterScreen() {
+  const [role, setRole] = useState<'vendor' | 'client'>('vendor');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +63,7 @@ export default function RegisterScreen() {
           name: cleanName || undefined,
           email: cleanEmail,
           password: cleanPassword,
+          role,
         }),
       });
 
@@ -111,7 +113,7 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.headerSection}>
-            <BrandLogo size={68} subtitle="Crear Cuenta en la Plataforma" />
+            <BrandLogo size={100} subtitle="Crear Cuenta en la Plataforma" />
           </View>
 
           <View style={styles.cardContainer}>
@@ -120,6 +122,50 @@ export default function RegisterScreen() {
               <Text style={styles.cardSubtitle}>
                 Completa tus datos para crear una nueva cuenta
               </Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Tipo de cuenta</Text>
+              <View style={styles.roleSelectorRow}>
+                <Pressable
+                  onPress={() => setRole('vendor')}
+                  style={[
+                    styles.roleChoiceBtn,
+                    role === 'vendor' ? styles.roleChoiceBtnActive : null,
+                  ]}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cuenta de Vendedor"
+                >
+                  <Text
+                    style={[
+                      styles.roleChoiceText,
+                      role === 'vendor' ? styles.roleChoiceTextActive : null,
+                    ]}
+                  >
+                    Vendedor
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setRole('client')}
+                  style={[
+                    styles.roleChoiceBtn,
+                    role === 'client' ? styles.roleChoiceBtnClientActive : null,
+                  ]}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cuenta de Cliente"
+                >
+                  <Text
+                    style={[
+                      styles.roleChoiceText,
+                      role === 'client' ? styles.roleChoiceTextActive : null,
+                    ]}
+                  >
+                    Cliente
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
             <View style={styles.formGroup}>
@@ -237,10 +283,7 @@ export default function RegisterScreen() {
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <View style={styles.buttonContent}>
-                  <Text style={styles.submitButtonText}>Registrarme</Text>
-                  <ArrowRight size={18} color="#FFFFFF" />
-                </View>
+                <Text style={styles.submitButtonText}>Registrarme</Text>
               )}
             </Pressable>
           </View>
@@ -390,5 +433,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0284C7',
+  },
+  roleSelectorRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  roleChoiceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  roleChoiceBtnActive: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  roleChoiceBtnClientActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  roleChoiceText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  roleChoiceTextActive: {
+    color: '#FFFFFF',
   },
 });

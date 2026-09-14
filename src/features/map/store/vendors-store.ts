@@ -9,6 +9,11 @@ export interface Vendor {
   photoUrl: string;
   lat: number;
   lng: number;
+  locationType?: 'realtime' | 'fixed';
+  isLive?: boolean;
+  phone?: string | null;
+  description?: string | null;
+  fixedAddress?: string | null;
   rating?: number;
   reviewsCount?: number;
 }
@@ -44,7 +49,7 @@ export const useVendorsStore = create<VendorsState>((set) => ({
   fetchVendors: async () => {
     set({ isLoading: true, errorMsg: null });
     try {
-      const response = await fetch(ENDPOINTS.vendors);
+      const response = await fetch(ENDPOINTS.vendors.list);
       if (!response.ok) {
         throw new Error('Failed to fetch vendors');
       }
@@ -58,9 +63,9 @@ export const useVendorsStore = create<VendorsState>((set) => ({
         };
       });
       set({ vendors: enriched, isLoading: false });
-    } catch (error) {
+    } catch {
       set({
-        errorMsg: 'No se pudieron cargar los vendedores. Verifica tu conexión e inténtalo de nuevo.',
+        errorMsg: 'No se pudieron cargar los puestos. Verifica tu conexión e inténtalo de nuevo.',
         isLoading: false,
       });
     }

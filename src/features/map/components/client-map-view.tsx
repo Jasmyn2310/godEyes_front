@@ -9,19 +9,22 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Compass, Filter, RefreshCw } from 'lucide-react-native';
+import { Compass, RefreshCw } from 'lucide-react-native';
 import { useLocationStore } from '@/features/map/store/location-store';
 import { useVendorsStore } from '@/features/map/store/vendors-store';
 import { socketService } from '@/core/services/socket';
 import { OSMMap } from '@/components/OSMMap';
+import { VendorDetailModal } from '@/features/vendor/components/vendor-detail-modal';
 
 const CATEGORIES = ['Todos', 'Desayuno', 'Snack', 'Bebidas', 'Postres', 'Almuerzo'] as const;
 
 export const ClientMapView: React.FC = () => {
   const { currentLocation, isLoading, errorMsg, requestPermissionsAndFetchLocation } =
     useLocationStore();
-  const { vendors, selectedVendor, fetchVendors, updateVendors } = useVendorsStore();
+  const { vendors, selectedVendor, fetchVendors, updateVendors, setSelectedVendor } =
+    useVendorsStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+  const [detailModalVendorId, setDetailModalVendorId] = useState<string | null>(null);
 
   useEffect(() => {
     void requestPermissionsAndFetchLocation();
@@ -46,6 +49,8 @@ export const ClientMapView: React.FC = () => {
             ...vendor,
             lat: matchingUpdate.lat,
             lng: matchingUpdate.lng,
+            isLive: true,
+            locationType: 'realtime' as const,
           };
         }
         return vendor;
@@ -69,6 +74,10 @@ export const ClientMapView: React.FC = () => {
     );
   }, [vendors, selectedCategory]);
 
+  const handleSelectVendorFromMap = (vendorId: string) => {
+    setDetailModalVendorId(vendorId);
+  };
+
   if (isLoading && !currentLocation) {
     return (
       <View style={styles.centerContainer}>
@@ -85,7 +94,7 @@ export const ClientMapView: React.FC = () => {
         <Pressable
           style={({ pressed }) => [styles.retryButton, pressed ? styles.retryButtonPressed : null]}
           onPress={requestPermissionsAndFetchLocation}
-          accessible={true}
+          accessible
           accessibilityRole="button"
           accessibilityLabel="Reintentar obtener ubicación"
         >
@@ -98,12 +107,13 @@ export const ClientMapView: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
+
       <View style={styles.topBar}>
         <View style={styles.searchBarContainer}>
           <Compass size={18} color="#0284C7" style={styles.searchIcon} />
           <Text style={styles.topBarTitle}>Radar de Puestos Cercanos</Text>
           <View style={styles.countBadge}>
-            <Text style={styles.countText}>{filteredVendors.length} activos</Text>
+            <Text style={styles.countText}>{filteredVendors.length} disponibles</Text>
           </View>
         </View>
 
@@ -123,7 +133,7 @@ export const ClientMapView: React.FC = () => {
                   isSelected ? styles.filterChipSelected : null,
                   pressed ? styles.filterChipPressed : null,
                 ]}
-                accessible={true}
+                accessible
                 accessibilityRole="button"
                 accessibilityLabel={`Filtrar por ${category}`}
               >
@@ -149,22 +159,38 @@ export const ClientMapView: React.FC = () => {
                   latitude: currentLocation.coords.latitude,
                   longitude: currentLocation.coords.longitude,
                 }
-              : undefined
+              : {
+                  latitude: -13.1606,
+                  longitude: -74.2258,
+                }
           }
           vendors={filteredVendors}
           focusVendor={selectedVendor}
+          onSelectVendor={handleSelectVendorFromMap}
         />
       </View>
 
       <Pressable
         onPress={() => fetchVendors()}
         style={({ pressed }) => [styles.floatingRefresh, pressed ? styles.floatingPressed : null]}
-        accessible={true}
+        accessible
         accessibilityRole="button"
         accessibilityLabel="Actualizar radar de puestos"
       >
         <RefreshCw size={20} color="#0F172A" />
       </Pressable>
+
+      <VendorDetailModal
+        vendorId={detailModalVendorId}
+        visible={Boolean(detailModalVendorId)}
+        onClose={() => setDetailModalVendorId(null)}
+        onFocusOnMap={(lat, lng) => {
+          const target = vendors.find((v) => v.id === detailModalVendorId);
+          if (target) {
+            setSelectedVendor({ ...target, lat, lng });
+          }
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -200,30 +226,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.2,
   },
   countBadge: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F0F9FF',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
   },
   countText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#1D4ED8',
+    fontWeight: '600',
+    color: '#0284C7',
   },
   filterScroll: {
     paddingHorizontal: 16,
     gap: 8,
   },
   filterChip: {
-    backgroundColor: '#F1F5F9',
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: 20,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -236,72 +259,68 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#475569',
   },
   filterChipTextSelected: {
     color: '#FFFFFF',
+    fontWeight: '600',
   },
   mapWrapper: {
     flex: 1,
   },
   floatingRefresh: {
     position: 'absolute',
+    right: 16,
     bottom: 24,
-    right: 20,
     width: 48,
     height: 48,
     borderRadius: 24,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    elevation: 4,
+    zIndex: 20,
   },
   floatingPressed: {
-    backgroundColor: '#F1F5F9',
-    transform: [{ scale: 0.95 }],
+    opacity: 0.8,
+    transform: [{ scale: 0.96 }],
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 24,
     backgroundColor: '#F8FAFC',
   },
   loadingText: {
-    marginTop: 14,
-    fontSize: 15,
+    marginTop: 12,
+    fontSize: 14,
     color: '#64748B',
-    fontWeight: '500',
+    textAlign: 'center',
   },
   errorText: {
-    fontSize: 15,
-    color: '#DC2626',
+    fontSize: 14,
+    color: '#EF4444',
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
+    marginBottom: 16,
   },
   retryButton: {
     backgroundColor: '#0284C7',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
   retryButtonPressed: {
-    backgroundColor: '#0369A1',
+    opacity: 0.8,
   },
   retryText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
