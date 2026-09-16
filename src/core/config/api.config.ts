@@ -2,10 +2,18 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 function resolveBaseUrl(): string {
+  // 1. Prioridad absoluta: Variable de entorno (para Vercel / producción)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/$/, '');
+  }
+
+  // 2. Si corre en Web localmente
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     return `http://${window.location.hostname}:3000`;
   }
 
+  // 3. Expo Go (Dispositivo físico / red local)
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const hostIp = hostUri.split(':')[0];
@@ -14,49 +22,15 @@ function resolveBaseUrl(): string {
     }
   }
 
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim().replace(/\/$/, '');
-  }
-
+  // 4. Android Emulator
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:3000';
   }
 
+  // 5. Fallback por defecto
   return 'http://localhost:3000';
 }
 
 export const API_BASE_URL = resolveBaseUrl();
 
-export const ENDPOINTS = {
-  auth: {
-    login: `${API_BASE_URL}/auth/login`,
-    register: `${API_BASE_URL}/auth/register`,
-    me: `${API_BASE_URL}/auth/me`,
-  },
-  users: {
-    profile: `${API_BASE_URL}/users/profile`,
-  },
-  catalog: {
-    categories: `${API_BASE_URL}/categories`,
-    products: `${API_BASE_URL}/products`,
-  },
-  promotions: `${API_BASE_URL}/promotions`,
-  sales: {
-    base: `${API_BASE_URL}/sales`,
-    summary: `${API_BASE_URL}/sales/summary`,
-  },
-  uploads: {
-    image: `${API_BASE_URL}/uploads/image`,
-  },
-  vendors: {
-    list: `${API_BASE_URL}/vendors`,
-    detail: (id: string) => `${API_BASE_URL}/vendors/${id}/detail`,
-  },
-  subscriptions: {
-    plans: `${API_BASE_URL}/subscriptions/plans`,
-  },
-  admin: {
-    dashboardStats: `${API_BASE_URL}/admin/dashboard-stats`,
-  },
-} as const;
+// ... (el objeto ENDPOINTS déjalo tal cual lo tienes abajo)
